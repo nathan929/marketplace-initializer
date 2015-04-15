@@ -180,7 +180,7 @@ module PaypalService
               NotifyURL: hook_url(config[:ipn_hook]),
               OrderTotal: from_money(req[:order_total]),
               ItemTotal: from_money(req[:item_price] * req[:item_quantity]),
-              PaymentAction: "Order",
+              PaymentAction: "Authorization",
               PaymentDetailsItem: [{
                 Name: req[:item_name],
                 Quantity: req[:item_quantity],
@@ -209,7 +209,7 @@ module PaypalService
       do_express_checkout_payment: PaypalAction.def_action(
         input_transformer: -> (req, config) {
           req_details = {
-            PaymentAction: "Order",
+            PaymentAction: "Authorization",
             Token: req[:token],
             PayerID: req[:payer_id],
             ButtonSource: config[:button_source],

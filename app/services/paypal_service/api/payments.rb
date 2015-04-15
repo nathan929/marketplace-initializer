@@ -266,9 +266,8 @@ module PaypalService::API
 
           order_details = create_order_details(ec_details)
                           .merge({community_id: token[:community_id], transaction_id: token[:transaction_id]})
-          @events.send(:order_details,
-                       :success,
-                       order_details)
+
+          @events.send(:order_details, :success, order_details)
 
           with_success(token[:community_id], token[:transaction_id],
             MerchantData.create_do_express_checkout_payment({
@@ -297,6 +296,9 @@ module PaypalService::API
             }
           ) do |payment_res|
             # Save payment
+
+            binding.pry
+
             payment = PaymentStore.create(
               token[:community_id],
               token[:transaction_id],
@@ -334,24 +336,31 @@ module PaypalService::API
     end
 
     def authorize_payment(community_id, payment)
-      @lookup.with_payment(community_id, payment[:transaction_id], [[:pending, :order]]) do |payment, m_acc|
-        with_success(community_id, payment[:transaction_id],
-          MerchantData.create_do_authorization({
-              receiver_username: m_acc[:payer_id],
-              order_id: payment[:order_id],
-              authorization_total: payment[:order_total]
-          }),
-          error_policy: {
-            codes_to_retry: ["10001", "x-timeout", "x-servererror"],
-            try_max: 5,
-            finally: (method :handle_failed_authorization).call(payment, m_acc)
-          }
-        ) do |auth_res|
+      @lookup.with_payment(community_id, payment[:transaction_id], [[:pending, :order], [:pending, :authorization]]) do |payment, m_acc|
+        # with_success(community_id, payment[:transaction_id],
+        #   MerchantData.create_do_authorization({
+        #       receiver_username: m_acc[:payer_id],
+        #       order_id: payment[:order_id],
+        #       authorization_total: payment[:order_total]
+        #   }),
+        #   error_policy: {
+        #     codes_to_retry: ["10001", "x-timeout", "x-servererror"],
+        #     try_max: 5,
+        #     finally: (method :handle_failed_authorization).call(payment, m_acc)
+        #   }
+        # ) do |auth_res|
 
           # Delete the token, we have now completed the payment request
           TokenStore.delete(community_id, payment[:transaction_id])
 
           # Save authorization data to payment
+          binding.pry
+          auth_res = {
+            authorization_id: payment[:order_id],
+            authorization_total: payment[:order_total],
+            authorization_date: payment[:order_date] }
+          binding.pry
+
           payment = PaymentStore.update(data: auth_res, community_id: community_id , transaction_id: payment[:transaction_id])
           payment_entity = DataTypes.create_payment(payment)
 
@@ -360,7 +369,7 @@ module PaypalService::API
 
           # Return as payment entity
           Result::Success.new(payment_entity)
-        end
+        # end
       end
     end
 
